@@ -1,0 +1,523 @@
+/* ===== Global Reset ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+}
+
+/* ===== Body ===== */
+/* Make the page take full height and use flex layout */
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: url('images/kevs_image.png') no-repeat center center fixed;
+  background-size: cover;
+  color: #333;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+}
+
+
+/* ===== Page System (SPA) ===== */
+.page {
+  display: none;
+  animation: fadeIn 0.4s ease-in-out;
+}
+
+.page.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ===== Main Title ===== */
+.main-title {
+  text-align: center;
+  margin-top: 40px;
+  color: #FFD700;
+  text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.7);
+}
+
+.main-title h1 {
+  font-size: 42px;
+  font-weight: bold;
+  letter-spacing: 2px;
+}
+
+/* ===== Forms (Login / Register) ===== */
+.section.form {
+  width: 360px;
+  margin: 40px auto;
+  padding: 25px;
+  background: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transition: all 0.4s ease;
+}
+
+.section.form:hover {
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+}
+
+.section.form input[type="text"],
+.section.form input[type="password"],
+.section.form input[type="email"] {
+  width: 100%;
+  height: 44px;              /* FORCE same height */
+  padding: 12px;
+  margin-bottom: 15px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  box-sizing: border-box;    /* VERY IMPORTANT */
+  appearance: none;          /* Remove browser styling */
+  -webkit-appearance: none;  /* Chrome / Safari */
+  -moz-appearance: none;     /* Firefox */
+}
+
+
+
+/* ===== Buttons ===== */
+.btnn {
+  width: 100%;
+  padding: 12px;
+  background: #2a5298;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  transition: 0.3s;
+  margin-top: 10px;
+}
+
+.btnn:hover {
+  background: #1e3c72;
+}
+
+/* ===== Signup / Switch Text ===== */
+.signup-text {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.signup-text button {
+  background: none;
+  border: none;
+  color: #2a5298;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.signup-text button:hover {
+  color: #1e3c72;
+}
+/* Portfolio Page Styles */
+#portfolio-page h1 {
+  font-size: 36px;
+  text-align: center;
+  color: #2a5298;
+  margin-bottom: 10px;
+}
+
+#portfolio-page .subheading {
+  text-align: center;
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 30px;
+}
+
+#portfolio-page h2 {
+  color: #2a5298;
+  margin-top: 25px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #2a5298;
+  display: inline-block;
+  padding-bottom: 3px;
+}
+
+#portfolio-page p {
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+/* Carousel Styles */
+.carousel {
+  position: relative;
+  width: 100%;
+  margin: 30px auto;
+  overflow: hidden;
+}
+
+.carousel-track-container {
+  overflow: hidden;
+  width: 100%;
+  background-color: #eba8a8;
+}
+
+.carousel-track {
+  display: flex;
+  transition: transform 0.5s ease-in-out;
+  list-style: none;
+  padding: 0;
+}
+
+.carousel-slide {
+  min-width: 100%;
+  text-align: center;
+  padding: 20px;
+  display: none;
+}
+
+.carousel-slide.active {
+  display: block;
+}
+
+.carousel-slide i {
+  color: #2a5298;
+  margin-bottom: 10px;
+}
+
+.carousel-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(42,82,152,0.8);
+  color: #fff;
+  border: none;
+  padding: 10px;
+  cursor: pointer;
+  border-radius: 50%;
+  font-size: 20px;
+}
+
+.carousel-btn:hover {
+  background: rgba(30,60,114,0.9);
+}
+
+.carousel-btn.prev { left: 10px; }
+.carousel-btn.next { right: 10px; }
+.carousel-image {
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 15px;
+}
+/* Portfolio Flex Layout */
+.portfolio-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 30px;
+  align-items: flex-start;
+}
+
+/* Left: Profile Image */
+.portfolio-image-container {
+  flex: 1 1 250px; /* grows but minimum 250px */
+  display: flex;
+  justify-content: right;
+  align-items: flex-start;
+  
+}
+ 
+.profile-image {
+  width: 200px;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 3px solid #2a5298;
+}
+
+/* Right: Content */
+.portfolio-content {
+  flex: 2 1 500px; /* main content area */
+}
+
+/* Make carousel inside content */
+.portfolio-content .carousel {
+  margin-top: 20px;
+}
+
+
+.skills-list, .projects-list {
+  margin: 10px 0 20px 20px;
+  font-size: 14px;
+}
+
+.skills-list li, .projects-list li {
+  margin-bottom: 8px;
+}
+
+#portfolio-page a {
+  color: #2a5298;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+#portfolio-page a:hover {
+  text-decoration: underline;
+}
+
+#portfolio-page button.btnn {
+  display: block;
+  margin: 20px auto 0;
+  font-size: 16px;
+  padding: 12px 20px;
+}
+
+
+/* ===== Sections (Projects / Dashboard) ===== */
+.section {
+  width: 90%;
+  max-width: 900px;
+  margin: 40px auto;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 25px;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  transition: all 0.4s ease;
+}
+.contact-info {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.contact-info h3 {
+  margin-bottom: 12px;
+  color: #d00aa9;
+}
+
+.social-links {
+  display: flex;
+  justify-content: center;
+  gap: 40px; /* more spacing for bigger icons */
+}
+
+.social-links a {
+  transition: 0.3s;
+}
+
+.social-links a:hover {
+  transform: scale(1.3);
+}
+
+/* Specific icon colors */
+.social-links a.linkedin i {
+  color: #0a66c2; /* LinkedIn blue */
+}
+
+.social-links a.youtube i {
+  color: #ff0000; /* YouTube red */
+}
+
+
+
+/* ===== Project Cards ===== */
+.card {
+  background: #f8f9fa;
+  padding: 18px;
+  border-radius: 8px;
+  margin-bottom: 18px;
+  border-left: 5px solid #2a5298;
+  transition: all 0.3s ease;
+}
+
+.card h3 {
+  color: #2a5298;
+  margin-bottom: 6px;
+}
+
+.card p {
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+/* Hover effect */
+.card:hover {
+  transform: scale(1.03);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+}
+.card.locked {
+  opacity: 0.5;
+  background: #e0e0e0;
+  border-left: 5px solid #999;
+}
+.project-image {
+  width: 100%;
+  max-height: 200px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+#project-image img {
+  width: 100%;
+  max-height: 300px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+.btnn.danger {
+  background: #1404eb;
+  color: white;
+}
+.btnn.danger:hover {
+  background: #216992;
+}
+
+/* ===== Dashboard Canvas ===== */
+canvas {
+  margin-top: 20px;
+  width: 100%;
+  background: #f0f2f5;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+/* ===== Utility Buttons (Back / Logout) ===== */
+.dashboard-actions {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.dashboard-actions .btnn {
+  width: auto;
+  padding: 10px 18px;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .section.form,
+  .section,
+  .card {
+    width: 95%;
+    margin: 20px auto;
+  }
+
+  .main-title h1 {
+    font-size: 34px;
+  }
+}
+/* ===== Footer ===== */
+.site-footer {
+  margin-top: 60px;
+  padding: 20px 10px;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+  font-size: 14px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.site-footer p {
+  margin: 6px 0;
+}
+
+.site-footer a {
+  color: #9ecbff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}
+.site-footer p {
+  margin: 5px 0;
+  font-size: 14px;
+}
+
+.site-footer a {
+  color: #fff;
+  text-decoration: underline;
+}
+
+/* ===== Progress Bar ===== */
+.progress-wrapper {
+  margin: 20px 0;
+}
+
+.progress-text {
+  margin-bottom: 6px;
+  font-weight: bold;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 12px;
+  background: #ddd;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #2a5298, #1e3c72);
+  transition: width 0.6s ease;
+}
+
+/* ===== Locked Projects ===== */
+.card.locked {
+  opacity: 0.5;
+  pointer-events: none;
+  filter: grayscale(100%);
+}
+
+/* ===== Completed Badge ===== */
+.badge {
+  display: inline-block;
+  background: green;
+  color: white;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  margin-left: 10px;
+}
+
+/* ===== Unlock Animation ===== */
+/* Unlock animation */
+.card.unlock {
+  animation: popIn 0.6s ease forwards;
+  border-left: 5px solid #f39c12; /* highlight unlocked project */
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+
+@keyframes unlockPop {
+  0% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+/* ===== Danger Button ===== */
+.btnn.danger {
+  background: #c0392b;
+}
+
+.btnn.danger:hover {
+  background: #922b21;
+}
+
+
