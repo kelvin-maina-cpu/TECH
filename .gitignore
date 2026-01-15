@@ -1,0 +1,8 @@
+*.pyc
+__pycache__/
+venv/
+.venv/
+kevs.db
+.env
+*.egg-info
+alembic/versions/*.pyc

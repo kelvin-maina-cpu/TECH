@@ -50,7 +50,10 @@
 <!-- ================= PORTFOLIO PAGE ================= -->
 <div id="portfolio-page" class="page">
   <div class="section">
-    <h1>Hi, I’m KELVIN MAINA – Web Developer & Video Editor</h1>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <h1>Hi, I’m KELVIN MAINA – Web Developer & Video Editor</h1>
+      <div id="user-info" style="text-align:right;font-size:14px;color:#444;"></div>
+    </div>
     <p class="subheading">
       I design interactive websites and create engaging videos that bring ideas to life. My goal is to blend technology and creativity to deliver experiences that both impress and perform.
     </p>
@@ -99,9 +102,7 @@
     <button class="btnn danger" onclick="showPage('login-page')">Go Back</button>
     <button class="btnn" onclick="goToProjects()">View Projects</button>
   </div>
-
-  </div>
-    <div class="contact-info">
+  <div class="contact-info">
     <h3>Connect with Me</h3>
     <div class="social-links">
       <a href="https://www.linkedin.com/in/kelvin-maina-a5a239354/" target="_blank" class="linkedin">
@@ -113,7 +114,6 @@
     </div>
   </div>
 </div>
-</div>
 
 
 
@@ -122,7 +122,10 @@
   <div class="section">
     <h2>Select a Project</h2>
     <p>Here are some friendly projects you can give a trial.Follow the workflow below and track your progress on the dashboard !</p>
-
+    <div id="points-area" style="text-align:right;margin-top:8px;">
+      <span id="points-display" style="font-weight:600;margin-right:12px;"></span>
+      <span id="badges-display"></span>
+    </div>
     <!-- Progress Bar -->
     <div class="progress-wrapper">
       <div class="progress-text" id="progress-text">0% Completed</div>
@@ -170,13 +173,25 @@
     <!-- Project Chart -->
     <canvas id="projectChart"></canvas>
 
+  <!-- Research charts: one chartbox per project for quick research/overview -->
+  <div id="research-charts" class="research-grid" aria-label="Research charts"></div>
+
+    <!-- Research modal -->
+    <div id="research-modal" class="modal" role="dialog" aria-modal="true" aria-hidden="true">
+      <div class="modal-content">
+        <button class="modal-close" aria-label="Close">×</button>
+        <h3 id="modal-project-title">Research</h3>
+        <div id="modal-resources"></div>
+      </div>
+    </div>
+
     <div class="dashboard-actions">
       <button class="btnn" onclick="completeProject()">Mark Project as Completed</button>
       <button class="btnn" onclick="backToProjects()">Back to Projects</button>
       <button class="btnn" onclick="logout()">Logout</button>
     </div>
     <div id="project-image"></div>
-      <p id="project-description" style="white-space: pre-line;"></p>
+
 
   </div>
 </div>
