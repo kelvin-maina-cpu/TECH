@@ -17,9 +17,26 @@ if (!localStorage.getItem("userPoints")) localStorage.setItem("userPoints", "0")
 // Helper: safe fetch wrapper for JSON
 async function fetchJSON(url, opts = {}) {
   try {
+    // Normalize common short paths (some clients or cached scripts may call 'projects' or 'user')
+    if (typeof url === 'string' && !url.startsWith('/') && !url.startsWith('http')) {
+      if (url === 'projects') { console.warn('Normalized short path "projects" to "/api/projects"'); url = '/api/projects'; }
+      else if (url === 'user') { console.warn('Normalized short path "user" to "/api/user"'); url = '/api/user'; }
+    }
     const res = await fetch(url, Object.assign({ headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin' }, opts));
-    const data = await res.json();
-    if (!res.ok) throw data;
+
+    // read raw text first (safer when server returns non-JSON or empty body)
+    const text = await res.text();
+    let data = null;
+    if (text) {
+      try { data = JSON.parse(text); } catch (e) { data = null; }
+    }
+
+    if (!res.ok) {
+      // If server returned JSON with message use it, otherwise include raw text/status
+      const err = (data && (data.message || data.error)) ? (data.message || data.error) : (text || res.statusText || `HTTP ${res.status}`);
+      throw { message: err, status: res.status, raw: text };
+    }
+
     return data;
   } catch (err) {
     console.error('fetchJSON error', url, err);
@@ -112,12 +129,18 @@ function renderProjects() {
   projects.forEach((p, i) => {
     const card = document.createElement("div");
     card.className = "card";
+    card.setAttribute('data-index', String(i));
+    // visually mark selected project when rendering list
+    if (typeof window._currentProject !== 'undefined' && window._currentProject === i) {
+      card.classList.add('selected');
+    }
 
     if (i > unlockedIndex) {
       card.classList.add("locked");
       card.innerHTML = `<h3>${p.name}</h3><p>🔒 Locked</p>`;
     } else {
       card.innerHTML = `
+        <div class="mini-chart" aria-hidden="true"><canvas id="project-mini-chart-${i}"></canvas></div>
         <img src="${p.image}" class="project-image">
         <h3>${p.name} ${completedProjects.includes(i) ? "✔" : ""}</h3>
         <p>${p.description}</p>
@@ -129,19 +152,81 @@ function renderProjects() {
   });
 
   updateProjectsProgressBar();
+  // render mini charts inside each project card
+  try { renderProjectMiniCharts(); } catch (e) { /* ignore */ }
+}
+
+function renderProjectMiniCharts() {
+  // destroy previous mini charts
+  try {
+    if (projectMiniCharts && projectMiniCharts.length) {
+      projectMiniCharts.forEach(c => { try { c.destroy(); } catch (e) { /* ignore */ } });
+      projectMiniCharts = [];
+    }
+  } catch (e) { /* ignore */ }
+
+  projects.forEach((p, i) => {
+    const canvas = document.getElementById(`project-mini-chart-${i}`);
+    if (!canvas) return;
+
+    // calculate percent same as research charts
+    let percent = 0;
+    const total = projectTasks[i] ? projectTasks[i].length : 0;
+    if (Array.isArray(completedProjects) && completedProjects.includes(i)) {
+      percent = 100;
+    } else {
+      let done = 0;
+      try {
+        const user = null; // we intentionally reuse local completion when rendering here
+        const local = JSON.parse(localStorage.getItem('taskCompletion')) || {};
+        if (local[i]) done = local[i].filter(Boolean).length;
+      } catch (e) { done = 0; }
+      percent = total ? Math.round((done / total) * 100) : 0;
+    }
+
+    try {
+      const ctx = canvas.getContext('2d');
+      const chart = new Chart(ctx, {
+        type: 'doughnut',
+        data: { labels: ['Done', 'Remaining'], datasets: [{ data: [percent, 100 - percent], backgroundColor: ['#2a5298', '#e6e6e6'] }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { enabled: false }, centerText: { display: true, text: `${percent}%`, color: '#2a5298', fontSize: 12, fontWeight: '700' } }
+        }
+      });
+      projectMiniCharts[i] = chart;
+    } catch (e) { console.warn('mini chart failed', i, e); }
+  });
 }
 
 /* ================= DASHBOARD ================= */
 let chartInstance = null;
+// keep references to research chart instances so we can destroy them when re-rendering
+let researchCharts = [];
+// mini charts for project list
+let projectMiniCharts = [];
 
 function selectProject(index) {
   // open project dashboard and load server-side task completion for this user
   showPage("dashboard-page");
 
-  document.getElementById("project-title").innerText = projects[index].name;
-  document.getElementById("project-description").innerText = projects[index].description;
-  document.getElementById("project-image").innerHTML =
-    `<img src="${projects[index].image}" class="project-image">`;
+  const titleEl = document.getElementById("project-title");
+  const descEl = document.getElementById("project-description");
+  const imgEl = document.getElementById("project-image");
+
+  // defensive checks: ensure project exists
+  if (!projects || !projects[index]) {
+    if (titleEl) titleEl.innerText = 'Project not found';
+    if (descEl) descEl.innerText = '';
+    if (imgEl) imgEl.innerHTML = '';
+    window._currentProject = undefined;
+    return;
+  }
+
+  titleEl.innerText = projects[index].name;
+  descEl.innerText = projects[index].description;
+  imgEl.innerHTML = `<img src="${projects[index].image}" class="project-image">`;
 
   // fetch user's task completion for this project from server
   (async () => {
@@ -153,14 +238,34 @@ function selectProject(index) {
   // refresh research charts so they reflect current user state
   renderResearchCharts();
       // store current project index in memory for completeProject
-      window._currentProject = index;
+        window._currentProject = index;
+        // highlight selection in project list
+        highlightSelectedProject(index);
+        // auto-open chatbox when opening a project dashboard (if chat exists)
+        try {
+          if (typeof chatBox !== 'undefined' && chatBox && chatBox.classList.contains('hidden')) {
+            chatBox.classList.remove('hidden');
+            // load history when opened
+            if (typeof loadChatHistory === 'function') loadChatHistory().catch(() => {});
+            if (chatInput) chatInput.focus();
+          }
+        } catch (e) { /* ignore if chat not defined yet */ }
     } catch (e) {
       // fallback to localStorage
       renderTasks(index);
       renderChart(index);
       window._currentProject = index;
+      highlightSelectedProject(index);
     }
   })();
+}
+
+function highlightSelectedProject(index) {
+  try {
+    document.querySelectorAll('#projects-container .card').forEach(c => c.classList.remove('selected'));
+    const sel = document.querySelector(`#projects-container .card[data-index='${index}']`);
+    if (sel) sel.classList.add('selected');
+  } catch (e) { /* ignore */ }
 }
 
 // Render a small research chart card for each project on the dashboard.
@@ -168,6 +273,41 @@ async function renderResearchCharts() {
   const container = document.getElementById('research-charts');
   if (!container) return;
   container.innerHTML = '';
+
+  // Register a small Chart.js plugin to render centered percentage text inside the doughnut.
+  // We register it once per page load (safeguard with window._centerTextRegistered).
+  try {
+    if (typeof Chart !== 'undefined' && !window._centerTextRegistered) {
+      Chart.register({
+        id: 'centerTextPlugin',
+        beforeDraw: function(chart, args, options) {
+          const cfg = chart.config.options.plugins && chart.config.options.plugins.centerText;
+          if (!cfg || !cfg.display) return;
+          const ctx = chart.ctx;
+          const width = chart.width;
+          const height = chart.height;
+          ctx.save();
+          const fontSize = cfg.fontSize || Math.floor(Math.min(width, height) / 6);
+          ctx.font = `${cfg.fontWeight || '700'} ${fontSize}px ${cfg.fontFamily || 'Segoe UI'}`;
+          ctx.fillStyle = cfg.color || '#2a5298';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          const txt = cfg.text || (chart.data.datasets && chart.data.datasets[0] && chart.data.datasets[0].data ? String(chart.data.datasets[0].data[0]) + '%' : '');
+          ctx.fillText(txt, width / 2, height / 2);
+          ctx.restore();
+        }
+      });
+      window._centerTextRegistered = true;
+    }
+  } catch (e) { console.warn('centerText plugin registration failed', e); }
+
+  // Destroy any previously created research charts to fully reset state
+  try {
+    if (researchCharts && researchCharts.length) {
+      researchCharts.forEach(c => { try { c.destroy(); } catch (e) { /* ignore */ } });
+      researchCharts = [];
+    }
+  } catch (e) { /* ignore */ }
 
   // Try to get user state from server; if not available fallback to localStorage
   let user = null;
@@ -219,10 +359,18 @@ async function renderResearchCharts() {
       percent = total ? Math.round((done / total) * 100) : 0;
     }
 
-    // Render a small doughnut chart
+    // percent will be drawn inside the doughnut via Chart.js center-text plugin
+
+    // Render a small doughnut chart (destroy previous instances first)
     try {
+      // Destroy any existing research chart instances before creating new ones
+      if (researchCharts && researchCharts[i]) {
+        try { researchCharts[i].destroy(); } catch (e) { /* ignore */ }
+        researchCharts[i] = null;
+      }
+
       const ctx = document.getElementById(`research-chart-${i}`).getContext('2d');
-      new Chart(ctx, {
+      const chart = new Chart(ctx, {
         type: 'doughnut',
         data: {
           labels: ['Done', 'Remaining'],
@@ -231,9 +379,21 @@ async function renderResearchCharts() {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { legend: { display: false }, tooltip: { enabled: true } }
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: true },
+            // centerText plugin options used by our registered plugin
+            centerText: { display: true, text: `${percent}%`, color: '#2a5298', fontSize: 14, fontWeight: '700', fontFamily: 'Segoe UI' }
+          },
+          onClick: function(evt, activeEls) {
+            // Open the project dashboard when the chart is clicked
+            try { selectProject(i); } catch (e) { /* ignore if function not present */ }
+          }
         }
       });
+
+      // Keep a reference so we can destroy it on next render
+      researchCharts[i] = chart;
     } catch (err) {
       console.warn('Chart render failed for research chart', i, err);
     }
@@ -278,6 +438,7 @@ document.addEventListener('keydown', (e) => {
 
 function renderTasks(index, completionFromServer) {
   const list = document.getElementById("task-list");
+  if (!list) return;
   list.innerHTML = "";
 
   // completionFromServer expected to be an array; if not provided, fall back to localStorage
@@ -287,6 +448,12 @@ function renderTasks(index, completionFromServer) {
   } else {
     completion = JSON.parse(localStorage.getItem("taskCompletion")) || {};
     if (!completion[index]) completion[index] = [];
+  }
+
+  // If no tasks are defined for this project, show a helpful message
+  if (!projectTasks || !projectTasks[index] || !Array.isArray(projectTasks[index]) || projectTasks[index].length === 0) {
+    list.innerHTML = '<div class="empty">No tasks defined for this project.</div>';
+    return;
   }
 
   projectTasks[index].forEach((task, i) => {
@@ -311,8 +478,11 @@ async function toggleTask(p, t, checked) {
       const user = await fetchJSON('/api/user');
       const completion = (user.task_completion && user.task_completion[String(p)]) || [];
       renderChart(p, completion);
+      // update small research charts to reflect this change
+      try { renderResearchCharts(); } catch (e) { /* ignore */ }
     } catch (e) {
       renderChart(p);
+      try { renderResearchCharts(); } catch (ee) { /* ignore */ }
     }
   } catch (err) {
     // fallback to localStorage when server not available
@@ -326,7 +496,21 @@ async function toggleTask(p, t, checked) {
 
 /* ================= CHART ================= */
 function renderChart(index, completionFromServer) {
-  const ctx = document.getElementById("projectChart").getContext("2d");
+  const canvas = document.getElementById("projectChart");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+
+  // Defensive: if tasks not defined, clear chart area and return
+  if (!projectTasks || !projectTasks[index] || projectTasks[index].length === 0) {
+    if (chartInstance) {
+      chartInstance.destroy();
+      chartInstance = null;
+    }
+    // Clear canvas
+    try { ctx.clearRect(0, 0, canvas.width, canvas.height); } catch (e) { /* ignore */ }
+    return;
+  }
+
   let data;
   if (Array.isArray(completionFromServer)) {
     data = projectTasks[index].map((_, i) => completionFromServer[i] ? 100 : 0);
@@ -370,6 +554,7 @@ async function completeProject() {
       showBadges();
       renderProjects();
       updateProjectsProgressBar();
+      try { renderResearchCharts(); } catch (e) { /* ignore */ }
       alert('Project completed! You earned 50 points and the next project unlocked.');
     }
   } catch (err) {
@@ -401,9 +586,11 @@ function updateProjectsProgressBar() {
   const fill = document.getElementById("progress-fill");
   const text = document.getElementById("progress-text");
 
-  const percent = Math.round(((unlockedIndex + 1) / projects.length) * 100);
-  fill.style.width = percent + "%";
-  text.innerText = percent + "% Completed";
+  // Guard against zero projects to avoid division by zero
+  const total = (projects && projects.length) ? projects.length : 0;
+  const percent = total ? Math.round(((unlockedIndex + 1) / total) * 100) : 0;
+  if (fill) fill.style.width = percent + "%";
+  if (text) text.innerText = percent + "% Completed";
 }
 
 /* ================= POINTS & BADGES ================= */
@@ -532,3 +719,92 @@ window.prevSlide = prevSlide;
 window.updatePointsDisplay = updatePointsDisplay;
 window.showBadges = showBadges;
 window.resetProgress = resetProgress;
+
+/* ================= CHATBOX (client) ================= */
+// Simple chat UI wiring to call /api/chat
+const chatBox = document.getElementById('chatbox');
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const chatSend = document.getElementById('chat-send');
+
+function formatTime(iso) {
+  try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
+}
+
+function renderChatHistory(history) {
+  if (!chatMessages) return;
+  chatMessages.innerHTML = '';
+  history.forEach(m => appendChatMessage(m.who, m.text, m.time));
+  // scroll to bottom
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function appendChatMessage(who, text, time) {
+  if (!chatMessages) return;
+  const el = document.createElement('div');
+  el.className = 'chat-msg ' + (who === 'bot' ? 'bot' : 'user');
+  const txt = document.createElement('div'); txt.className = 'chat-text'; txt.innerText = text;
+  const meta = document.createElement('div'); meta.className = 'chat-meta'; meta.innerText = formatTime(time || new Date().toISOString());
+  el.appendChild(txt); el.appendChild(meta);
+  chatMessages.appendChild(el);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+async function loadChatHistory() {
+  try {
+    const res = await fetchJSON('/api/chat');
+    if (res && res.success) renderChatHistory(res.history || []);
+  } catch (e) {
+    appendChatMessage('bot', 'Chat unavailable (server offline or not authenticated).', new Date().toISOString());
+  }
+}
+
+async function sendChatMessage() {
+  if (!chatInput) return;
+  const text = chatInput.value.trim();
+  if (!text) return;
+  // optimistically append
+  appendChatMessage('user', text, new Date().toISOString());
+  chatInput.value = '';
+  // show a temporary typing indicator
+  const typingId = 'typing-' + Date.now();
+  appendChatMessage('bot', '…', new Date().toISOString());
+  try {
+    const res = await fetchJSON('/api/chat', { method: 'POST', body: JSON.stringify({ message: text }) });
+    // remove the last bot 'typing' message and render history returned by server
+    // simple strategy: clear and re-render server history if provided
+    if (res && res.success) {
+      if (Array.isArray(res.history)) renderChatHistory(res.history);
+      else if (res.reply) {
+        // append bot reply
+        appendChatMessage('bot', res.reply.text || res.reply, new Date().toISOString());
+      }
+    } else {
+      appendChatMessage('bot', res.message || 'No reply from server', new Date().toISOString());
+    }
+  } catch (err) {
+    appendChatMessage('bot', 'Failed to send message (server offline or not authenticated).', new Date().toISOString());
+  }
+}
+
+// Toggle chat visibility (header click) and wire events
+if (chatBox) {
+  // start hidden; user can open by clicking header or programmatically
+  chatBox.classList.add('hidden');
+  const header = chatBox.querySelector('.chatbox-header');
+  const closeBtn = chatBox.querySelector('.chatbox-close');
+  if (header) header.addEventListener('click', async (e) => {
+    // toggle
+    if (chatBox.classList.contains('hidden')) {
+      chatBox.classList.remove('hidden');
+      // load history when opened
+      await loadChatHistory();
+      if (chatInput) chatInput.focus();
+    } else {
+      chatBox.classList.add('hidden');
+    }
+  });
+  if (closeBtn) closeBtn.addEventListener('click', (e) => { e.stopPropagation(); chatBox.classList.add('hidden'); });
+  if (chatSend) chatSend.addEventListener('click', sendChatMessage);
+  if (chatInput) chatInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessage(); });
+}

@@ -192,6 +192,19 @@
     </div>
     <div id="project-image"></div>
 
+    <!-- Chatbox: live conversation on dashboard -->
+    <div id="chatbox" class="chatbox" aria-live="polite">
+      <div class="chatbox-header">
+        <div class="chatbox-title">Assistant</div>
+        <button class="chatbox-close" aria-label="Close chat">×</button>
+      </div>
+      <div class="chatbox-messages" id="chat-messages" role="log"></div>
+      <div class="chatbox-input">
+        <input id="chat-input" placeholder="Ask about projects, tasks, or points..." aria-label="Message" />
+        <button id="chat-send" class="btnn">Send</button>
+      </div>
+    </div>
+
 
   </div>
 </div>

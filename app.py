@@ -1,10 +1,13 @@
-from flask import Flask, request, jsonify, session, render_template
+from flask import Flask, request, jsonify, session, render_template, send_from_directory
+from datetime import datetime
+from flask_cors import CORS
 import os
 import json
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import create_engine, Column, Integer, String, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, scoped_session
+from typing import List
 
 # Configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -13,7 +16,10 @@ DATABASE_URL = os.environ.get('DATABASE_URL', DEFAULT_SQLITE)
 SECRET_KEY = os.environ.get('FLASK_SECRET_KEY', 'change-me-in-production')
 
 # Flask app
-app = Flask(__name__, static_folder='.', template_folder='.')
+# Serve top-level static files directly from the project root so requests
+# like `/style.css`, `/main.js` and `/images/...` are handled by Flask.
+app = Flask(__name__, static_folder='.', static_url_path='', template_folder='.')
+CORS(app, supports_credentials=True)
 app.secret_key = SECRET_KEY
 # Recommended production cookie settings (can be overridden by env)
 app.config.update(
@@ -112,6 +118,52 @@ PROJECT_TASKS = [
     ["Book Cataloging", "Borrowing Management", "Return Tracking", "User Accounts"]
 ]
 
+# Directory to persist chat logs per user (simple file store for development)
+CHAT_DIR = os.path.join(BASE_DIR, 'data', 'chats')
+os.makedirs(CHAT_DIR, exist_ok=True)
+
+
+def chat_history_path(username: str) -> str:
+    safe = ''.join(c for c in username if c.isalnum() or c in ('_', '-')).lower()
+    return os.path.join(CHAT_DIR, f"{safe}.json")
+
+
+def load_chat_history(username: str) -> List[dict]:
+    path = chat_history_path(username)
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_chat_history(username: str, history: List[dict]):
+    path = chat_history_path(username)
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(history, f, ensure_ascii=False, indent=2)
+
+
+def bot_reply(user_name: str, message: str) -> str:
+    """Simple rule-based bot for development. Returns a short reply."""
+    m = (message or '').strip().lower()
+    # Quick rules
+    if not m:
+        return "Could you rephrase that? I didn't catch it."
+    if 'project' in m or 'projects' in m:
+        return "You can open Projects to see available work. Click a chart or 'Open Project' to view tasks and progress."
+    if 'task' in m or 'tasks' in m:
+        return "Tasks are listed on the project dashboard. Check/uncheck them to track progress — completing all tasks marks the project complete."
+    if 'points' in m or 'score' in m:
+        return "Points are awarded when you complete a project (50 points). Check your points on the Projects page."
+    if 'hello' in m or 'hi' in m:
+        return f"Hi {user_name or 'there'}! How can I help with your projects today?"
+    if 'help' in m:
+        return "Ask me about projects, tasks, or how to use the dashboard — I'll do my best to help."
+    # default: echo-like helpful reply
+    return "Thanks for your question — I registered it. Try asking about 'projects', 'tasks', or 'points'."
+
 
 def init_db():
     # Create tables
@@ -139,9 +191,63 @@ def index():
     return render_template('index.html')
 
 
+@app.route('/debug/ping', methods=['GET'])
+def debug_ping():
+    """Lightweight debug endpoint to confirm which server handled the request."""
+    return jsonify({
+        'status': 'ok',
+        'pid': os.getpid(),
+        'time': datetime.utcnow().isoformat() + 'Z',
+        'host': request.host,
+        'path': request.path
+    })
+
+
+# Fallback routes for top-level static assets. These are explicit fallbacks so the
+# SPA can fetch `style.css`, `main.js` and `favicon.ico` even if a proxy or other
+# server is intercepting requests. The app is already configured with
+# `static_folder='.'` but some environments (or developer setups) may still
+# return HTML 404s — these explicit routes help during development.
+@app.route('/style.css')
+def serve_style():
+    return send_from_directory(BASE_DIR, 'style.css')
+
+
+@app.route('/main.js')
+def serve_main_js():
+    return send_from_directory(BASE_DIR, 'main.js')
+
+
+@app.route('/favicon.ico')
+def serve_favicon():
+    fav = os.path.join(BASE_DIR, 'favicon.ico')
+    if os.path.exists(fav):
+        return send_from_directory(BASE_DIR, 'favicon.ico')
+    # No favicon present — return empty 204 so browser doesn't get an HTML 404
+    return ('', 204)
+
+
+# Serve images from the images/ folder so requests like /images/mimi.png
+# are correctly handled by Flask during development.
+@app.route('/images/<path:filename>')
+def serve_images(filename):
+    images_dir = os.path.join(BASE_DIR, 'images')
+    return send_from_directory(images_dir, filename)
+
+
+@app.before_request
+def log_request_info():
+    try:
+        data = request.get_data(as_text=True)
+    except Exception:
+        data = '<unable to read body>'
+    print(f"[REQUEST] {request.method} {request.path} body={data}")
+
+
 @app.route('/api/projects', methods=['GET'])
 def api_projects():
     return jsonify({'projects': PROJECTS, 'project_tasks': PROJECT_TASKS})
+
 
 
 @app.route('/api/register', methods=['POST'])
@@ -176,6 +282,18 @@ def api_register():
         return jsonify({'success': True, 'message': 'Account created'})
     finally:
         db.close()
+
+
+@app.errorhandler(405)
+def method_not_allowed(e):
+    # Return JSON for method-not-allowed errors to help the SPA client
+    return jsonify({'success': False, 'message': 'Method Not Allowed', 'detail': str(e)}), 405
+
+
+@app.errorhandler(500)
+def server_error(e):
+    # Generic JSON error handler for server errors during development; do not expose in production
+    return jsonify({'success': False, 'message': 'Internal Server Error', 'detail': str(e)}), 500
 
 
 @app.route('/api/login', methods=['POST'])
@@ -222,6 +340,47 @@ def api_user():
     if not user:
         return jsonify({'logged_in': False}), 200
     return jsonify(dict(logged_in=True, **user.to_dict()))
+
+
+@app.route('/api/chat', methods=['GET'])
+def api_chat_get():
+    """Return chat history for the current user."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'message': 'Not logged in'}), 401
+    history = load_chat_history(user.username)
+    return jsonify({'success': True, 'history': history})
+
+
+@app.route('/api/chat', methods=['POST'])
+def api_chat_post():
+    """Append a user message and return bot reply (persisted to disk)."""
+    user = get_current_user()
+    if not user:
+        return jsonify({'success': False, 'message': 'Not logged in'}), 401
+
+    data = request.get_json() or {}
+    text = (data.get('message') or '').strip()
+    if not text:
+        return jsonify({'success': False, 'message': 'Empty message'}), 400
+
+    # load history, append user's message, produce bot reply and persist
+    history = load_chat_history(user.username)
+    user_msg = {'who': 'user', 'text': text, 'time': datetime.utcnow().isoformat() + 'Z'}
+    history.append(user_msg)
+
+    # get bot reply (simple local rule-based reply)
+    reply_text = bot_reply(user.username, text)
+    bot_msg = {'who': 'bot', 'text': reply_text, 'time': datetime.utcnow().isoformat() + 'Z'}
+    history.append(bot_msg)
+
+    try:
+        save_chat_history(user.username, history)
+    except Exception as e:
+        print('Failed to save chat history', e)
+
+    return jsonify({'success': True, 'reply': bot_msg, 'history': history})
+
 
 
 @app.route('/api/user/progress/task', methods=['POST'])
